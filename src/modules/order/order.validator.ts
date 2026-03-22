@@ -2,8 +2,10 @@ import { z } from 'zod';
 import { OrderStatus } from '../../shared/types/enums';
 
 export const orderItemSchema = z.object({
-  menuItemId: z.string().uuid(),
-  quantity: z.number().int().positive().max(50),
+  // Use loose id check: Zod 4's .uuid() enforces RFC variant bits; legacy/demo IDs in DB
+  // (e.g. ...-2222-2222-2222-...) are rejected. Existence is validated in OrderService.
+  menuItemId: z.string().min(1).max(64),
+  quantity: z.coerce.number().int().positive().max(50),
   // Clients often send JSON null; `.optional()` only allows undefined, not null
   notes: z.string().max(250).nullish(),
 });
@@ -18,7 +20,8 @@ export const placeOrderSchema = z.object({
 
 export const updateOrderStatusSchema = z.object({
   status: z.nativeEnum(OrderStatus),
-  rejectionReason: z.string().max(250).optional(),
+  // JSON clients may send null when clearing / omitting reason
+  rejectionReason: z.string().max(250).nullish(),
 });
 
 export type PlaceOrderInput = z.infer<typeof placeOrderSchema>;
