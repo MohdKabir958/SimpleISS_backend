@@ -13,6 +13,7 @@ All HTTP routes are versioned under **`/api/v1`**.
 - [Prerequisites](#prerequisites)
 - [Quick start](#quick-start)
 - [Environment variables](#environment-variables)
+- [Redis (Upstash or local)](#redis-upstash-or-local)
 - [Database & Prisma](#database--prisma)
 - [Scripts](#scripts)
 - [Project structure](#project-structure)
@@ -55,7 +56,7 @@ All HTTP routes are versioned under **`/api/v1`**.
 
 - **Node.js** 18+ and npm
 - **PostgreSQL** (local, Docker, or hosted e.g. Render)
-- **Redis** (required at startup for the current server bootstrap)
+- **Redis** — [Upstash](#redis-upstash-or-local) (recommended) or a local `redis://` instance
 
 ---
 
@@ -81,9 +82,9 @@ Minimum required:
 
 - `DATABASE_URL` — PostgreSQL connection string  
 - `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` — each **≥ 32 characters**  
-- `REDIS_URL` — e.g. `redis://localhost:6379`
+- **Redis:** either **`UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`** (Upstash) **or** `REDIS_URL` (e.g. `redis://localhost:6379`)
 
-See [Environment variables](#environment-variables).
+See [Environment variables](#environment-variables) and [Redis (Upstash or local)](#redis-upstash-or-local).
 
 ### 3. Create schema and (optional) seed data
 
@@ -120,7 +121,9 @@ Loaded via `dotenv` from **`backend/.env`** (do **not** commit real secrets).
 | `NODE_ENV` | No | `development` \| `staging` \| `production` (default: `development`) |
 | `PORT` | No | HTTP port (default: `3000`) |
 | `DATABASE_URL` | **Yes** | PostgreSQL URL. Cloud hosts often need `?schema=public&sslmode=require` |
-| `REDIS_URL` | No* | Redis connection string (default: `redis://localhost:6379`) *Server expects Redis at startup |
+| `UPSTASH_REDIS_REST_URL` | No* | Upstash REST base URL, e.g. `https://xxxx.upstash.io` |
+| `UPSTASH_REDIS_REST_TOKEN` | No* | Upstash REST token (paired with URL above) |
+| `REDIS_URL` | No** | Standard Redis URL (`redis://` or `rediss://`) when Upstash vars are not both set (default: `redis://localhost:6379`) |
 | `JWT_ACCESS_SECRET` | **Yes** | Min 32 characters |
 | `JWT_REFRESH_SECRET` | **Yes** | Min 32 characters |
 | `CORS_ORIGIN` | No | Allowed browser origin for CORS (default: `http://localhost:8080`) |
@@ -128,7 +131,28 @@ Loaded via `dotenv` from **`backend/.env`** (do **not** commit real secrets).
 | `QR_BASE_URL` | No | Base URL embedded in QR links (default: `http://localhost:8080`) |
 | `S3_*` / `CLOUDINARY_URL` | If used | See `.env.example` for optional object storage |
 
+\*If both `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are set, they take precedence and the app builds a **`rediss://`** URL for [ioredis](https://github.com/redis/ioredis) (caching + Socket.IO Redis adapter). The HTTP REST API alone is not used for pub/sub.
+
+\**Otherwise use `REDIS_URL` for local or any Redis-compatible URL.
+
 Full template: **`.env.example`**.
+
+---
+
+## Redis (Upstash or local)
+
+This app uses **ioredis** (TCP `redis://` / `rediss://`) for:
+
+- Menu cache, session fast-path, order sequence counters  
+- **Socket.IO** `@socket.io/redis-adapter` (needs Redis **pub/sub**)
+
+So we connect to Upstash’s **Redis protocol endpoint** (TLS), not the HTTP REST API. The Upstash dashboard gives **REST URL + token**; we derive:
+
+`rediss://default:<TOKEN>@<host>.upstash.io:6379`
+
+Implementation: `src/config/redisUrl.ts` (`buildUpstashRedisUrl`, `resolveRedisUrl`).
+
+**Local development:** use `REDIS_URL=redis://localhost:6379` and run Redis (e.g. Docker Compose) without setting the Upstash variables.
 
 ---
 
@@ -182,7 +206,7 @@ backend/
 ├── src/
 │   ├── app.ts              # Express app, routes, middleware
 │   ├── server.ts           # HTTP server, Redis, Socket.IO bootstrap
-│   ├── config/             # env, database, redis, cors, logger
+│   ├── config/             # env, redisUrl, database, redis, cors, logger
 │   ├── middleware/         # auth, roles, validation, rate limits, errors
 │   ├── modules/            # Feature modules (routes + controllers + services)
 │   ├── socket/             # Socket.IO server & handlers
@@ -267,7 +291,7 @@ Ensure **`DATABASE_URL`**, **`REDIS_URL`**, and JWT secrets are injected at runt
 |-------|----------------|
 | `Invalid environment variables` | JWT secrets length ≥ 32; `DATABASE_URL` set |
 | DB connection errors | URL, firewall, `sslmode=require` for cloud Postgres |
-| Redis connection errors | Redis running; `REDIS_URL` correct |
+| Redis connection errors | Redis running; or Upstash URL+token set; `rediss://` requires TLS (handled automatically) |
 | Prisma Studio shows 0 rows | `.env` `DATABASE_URL` points to intended DB; restart Studio |
 | CORS errors from browser | `CORS_ORIGIN` matches frontend origin (scheme + host + port) |
 

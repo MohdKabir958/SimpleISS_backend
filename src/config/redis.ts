@@ -20,10 +20,11 @@ export async function connectRedis(): Promise<void> {
         return Math.min(times * 200, 2000);
       },
       lazyConnect: true,
+      // Upstash / TLS endpoints use rediss:// — ioredis enables TLS automatically
     });
 
     redis.on('connect', () => {
-      logger.info('Redis connected');
+      logger.info('Redis connected', { source: config.redis.source });
     });
 
     redis.on('error', (err) => {

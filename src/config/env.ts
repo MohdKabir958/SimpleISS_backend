@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import { resolveRedisUrl } from './redisUrl';
 
 dotenv.config();
 
@@ -9,7 +10,12 @@ const envSchema = z.object({
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 
-  REDIS_URL: z.string().default('redis://localhost:6379'),
+  /** Local / self-hosted Redis, or any rediss:// URL (takes effect if Upstash vars are not set). */
+  REDIS_URL: z.string().optional(),
+
+  /** Upstash REST API base URL, e.g. https://xxx.upstash.io — used with token to build rediss:// for ioredis */
+  UPSTASH_REDIS_REST_URL: z.string().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
 
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET must be at least 32 characters'),
   JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
@@ -36,6 +42,12 @@ if (!parsed.success) {
   process.exit(1);
 }
 
+const { url: redisConnectionUrl, source: redisUrlSource } = resolveRedisUrl({
+  upstashRestUrl: parsed.data.UPSTASH_REDIS_REST_URL,
+  upstashToken: parsed.data.UPSTASH_REDIS_REST_TOKEN,
+  redisUrl: parsed.data.REDIS_URL,
+});
+
 export const config = {
   env: parsed.data.NODE_ENV,
   port: parsed.data.PORT,
@@ -47,7 +59,9 @@ export const config = {
   },
 
   redis: {
-    url: parsed.data.REDIS_URL,
+    /** Resolved URL for ioredis (Upstash → rediss://default:...@host:6379) */
+    url: redisConnectionUrl,
+    source: redisUrlSource,
   },
 
   jwt: {
