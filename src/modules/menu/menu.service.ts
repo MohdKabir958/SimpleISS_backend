@@ -156,7 +156,10 @@ export class MenuService {
     // Try to find restaurant ID from slug
     const restaurant = await prisma.restaurant.findUnique({
       where: { slug: restaurantSlug },
-      select: { id: true, name: true, slug: true, logo: true, openingTime: true, closingTime: true, isActive: true },
+      select: {
+        id: true, name: true, slug: true, logo: true, openingTime: true, closingTime: true, isActive: true,
+        address: true, phone: true,
+      },
     });
 
     if (!restaurant || !restaurant.isActive) throw new NotFoundError('Restaurant', 'RESTAURANT_NOT_FOUND');
@@ -188,7 +191,7 @@ export class MenuService {
             where: { isActive: true },
             orderBy: { sortOrder: 'asc' },
             select: {
-              id: true, name: true, description: true, price: true,
+              id: true, categoryId: true, name: true, description: true, price: true,
               imageUrl: true, isVeg: true, isAvailable: true,
             },
           },
