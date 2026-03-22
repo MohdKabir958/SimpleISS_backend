@@ -261,6 +261,32 @@ Redis is used for scaling adapters; configure `REDIS_URL` accordingly in product
 
 ---
 
+## Deploy on Render
+
+Your repo may look like `SimplISS/backend/...`. Render must run **build and start from the `backend` folder** (where `package.json` and `dist/` are created).
+
+### Dashboard settings
+
+| Setting | Value |
+|--------|--------|
+| **Root Directory** | `backend` |
+| **Build Command** | `npm install && npx prisma generate && npm run build` |
+| **Start Command** | `node dist/server.js` |
+
+**Why builds failed with Express / `@types` errors:** Render sets `NODE_ENV=production` during install, so `npm install` **skips `devDependencies`**. This project keeps **`typescript`** and **`@types/*`** needed for `tsc` in **`dependencies`**, so the build works. If you add more build-only tools, either move them to `dependencies` or use `npm install --include=dev` in the build command.
+
+If Root Directory is wrong (e.g. repo root without `backend`), the app looks for `dist/server.js` in the wrong place and you get:
+
+`Cannot find module '.../dist/server.js'`.
+
+### Blueprint
+
+At the **repository root**, `render.yaml` can define `rootDir: backend` so you don’t forget. Sync the blueprint in the Render dashboard after pushing.
+
+Set **all env vars** (see [Environment variables](#environment-variables)) in Render — especially `DATABASE_URL`, JWT secrets, and Redis/Upstash.
+
+---
+
 ## Docker
 
 Build from the `backend` directory (or via repo root `docker compose` which includes this service).
