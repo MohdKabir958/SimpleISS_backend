@@ -184,7 +184,7 @@ npx prisma studio            # GUI at http://localhost:5555
 |--------|-------------|
 | `npm run dev` | Dev server with `tsx watch` |
 | `npm run build` | Compile TypeScript → `dist/` |
-| `npm start` | Run `node dist/server.js` |
+| `npm start` | Run `node dist/src/server.js` |
 | `npm run prisma:generate` | `prisma generate` |
 | `npm run prisma:migrate` | `prisma migrate dev` |
 | `npm run prisma:seed` | `tsx prisma/seed.ts` |
@@ -271,13 +271,15 @@ Your repo may look like `SimplISS/backend/...`. Render must run **build and star
 |--------|--------|
 | **Root Directory** | `backend` |
 | **Build Command** | `npm install && npx prisma generate && npm run build` |
-| **Start Command** | `node dist/server.js` |
+| **Start Command** | `node dist/src/server.js` |
 
 **Why builds failed with Express / `@types` errors:** Render sets `NODE_ENV=production` during install, so `npm install` **skips `devDependencies`**. This project keeps **`typescript`** and **`@types/*`** needed for `tsc` in **`dependencies`**, so the build works. If you add more build-only tools, either move them to `dependencies` or use `npm install --include=dev` in the build command.
 
-If Root Directory is wrong (e.g. repo root without `backend`), the app looks for `dist/server.js` in the wrong place and you get:
+If Root Directory is wrong (e.g. repo root without `backend`), the app looks for the compiled file in the wrong place and you get:
 
-`Cannot find module '.../dist/server.js'`.
+`Cannot find module '.../dist/src/server.js'`.
+
+(`tsc` emits `src/server.ts` → `dist/src/server.js`.)
 
 ### Blueprint
 
@@ -294,7 +296,7 @@ Build from the `backend` directory (or via repo root `docker compose` which incl
 The image runs:
 
 ```bash
-node dist/server.js
+node dist/src/server.js
 ```
 
 Ensure **`DATABASE_URL`**, **`REDIS_URL`**, and JWT secrets are injected at runtime (env file or orchestrator secrets).
