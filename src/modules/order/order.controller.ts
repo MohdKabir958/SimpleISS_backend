@@ -11,8 +11,10 @@ export class OrderController {
   // Public Endpoint
   async placeOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      // Allow client-provided idempotency key, fallback to a header, fallback to generated
-      const idempotencyKey = req.headers['idempotency-key'] as string || uuidv4();
+      // Idempotency: header (standard), or body (Flutter client), else random
+      const bodyKey = typeof req.body?.idempotencyKey === 'string' ? req.body.idempotencyKey : undefined;
+      const idempotencyKey =
+        (req.headers['idempotency-key'] as string | undefined) || bodyKey || uuidv4();
       const sessionId = req.params.sessionId as string;
       const order = await service.placeOrder(sessionId, req.body, idempotencyKey);
       

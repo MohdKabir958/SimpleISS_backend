@@ -24,13 +24,14 @@ export function validate(schemas: ValidationSchemas) {
     } catch (error) {
       if (error instanceof ZodError) {
         const details: Record<string, string[]> = {};
-        (error as any).errors.forEach((err: any) => {
-          const path = err.path.join('.');
+        // Zod 3+ uses `issues` (not `.errors`)
+        for (const err of error.issues) {
+          const path = err.path.length ? err.path.join('.') : '_root';
           if (!details[path]) {
             details[path] = [];
           }
           details[path].push(err.message);
-        });
+        }
 
         next(new ValidationError('Validation failed', { fields: details }));
         return;
