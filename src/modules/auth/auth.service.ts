@@ -176,3 +176,11 @@ export class AuthService {
     });
   }
 }
+
+/** Periodic job: remove expired refresh token rows (LOGIC-4) */
+export async function cleanupExpiredRefreshTokens(): Promise<number> {
+  const result = await prisma.refreshToken.deleteMany({
+    where: { expiresAt: { lt: new Date() } },
+  });
+  return result.count;
+}

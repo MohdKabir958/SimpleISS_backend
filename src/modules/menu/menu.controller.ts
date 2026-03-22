@@ -1,6 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import { MenuService } from './menu.service';
 import { sendSuccess, sendCreated } from '../../shared/utils/response';
+import {
+  createMenuItemMultipartSchema,
+  updateMenuItemMultipartSchema,
+  type CreateMenuItemInput,
+  type UpdateMenuItemInput,
+} from './menu.validator';
 
 const service = new MenuService();
 
@@ -50,14 +56,24 @@ export class MenuController {
   async createItem(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const imageUrl = req.file ? `/uploads/${req.file.filename}` : req.body.imageUrl;
-      sendCreated(res, await service.createItem(req.restaurantId!, req.body, imageUrl));
+      const body = createMenuItemMultipartSchema.parse(req.body);
+      const payload: CreateMenuItemInput = {
+        ...body,
+        description: body.description === null ? undefined : body.description,
+      };
+      sendCreated(res, await service.createItem(req.restaurantId!, payload, imageUrl));
     } catch (e) { next(e); }
   }
 
   async updateItem(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const imageUrl = req.file ? `/uploads/${req.file.filename}` : req.body.imageUrl;
-      sendSuccess(res, await service.updateItem(req.restaurantId!, req.params.itemId as string, req.body, imageUrl));
+      const body = updateMenuItemMultipartSchema.parse(req.body);
+      const payload: UpdateMenuItemInput = {
+        ...body,
+        description: body.description === null ? undefined : body.description,
+      };
+      sendSuccess(res, await service.updateItem(req.restaurantId!, req.params.itemId as string, payload, imageUrl));
     } catch (e) { next(e); }
   }
 

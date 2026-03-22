@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { RestaurantService } from './restaurant.service';
 import { sendSuccess, sendCreated, sendPaginated } from '../../shared/utils/response';
-import { extractPagination } from '../../shared/utils/pagination';
+import { DEFAULT_USER_SORT, extractPagination } from '../../shared/utils/pagination';
 
 const service = new RestaurantService();
 
@@ -53,7 +53,7 @@ export class RestaurantController {
 
   async listUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const pagination = extractPagination(req);
+      const pagination = extractPagination(req, { sortAllowlist: DEFAULT_USER_SORT });
       const { data, total } = await service.listUsers(pagination);
       sendPaginated(res, data, { page: pagination.page, limit: pagination.limit, total });
     } catch (error) { next(error); }

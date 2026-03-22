@@ -1,14 +1,21 @@
+import fs from 'fs';
 import multer from 'multer';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { AppError } from '../shared/errors/AppError';
+
+function ensureUploadsDir(): string {
+  const dir = path.resolve(process.cwd(), 'uploads');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    cb(null, path.resolve(process.cwd(), 'uploads'));
+    cb(null, ensureUploadsDir());
   },
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();

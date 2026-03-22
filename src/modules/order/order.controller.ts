@@ -61,12 +61,26 @@ export class OrderController {
         req.body.rejectionReason
       );
       
-      // Emit socket event to customer
+      // Customer app listens for `status_update` / `order_ready` (see kitchenHandler + socket_service.dart)
       const io = getSocketServer();
-      io.of('/customer')
-        .to(`session_${order.sessionId}`)
-        .emit('order_status_updated', order);
-        
+      const customerNs = io.of('/customer');
+      const room = `session_${order.sessionId}`;
+      const payload = {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        updatedAt: order.updatedAt,
+      };
+      customerNs.to(room).emit('status_update', payload);
+      if (order.status === OrderStatus.READY) {
+        customerNs.to(room).emit('order_ready', {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          status: order.status,
+          updatedAt: order.updatedAt,
+        });
+      }
+
       sendSuccess(res, order, `Order status updated to ${req.body.status}`);
     } catch (e) { next(e); }
   }

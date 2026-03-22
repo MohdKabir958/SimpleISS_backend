@@ -268,8 +268,8 @@ export class RestaurantService {
       totalRevenueAgg,
       todayRevenueAgg,
       topPerforming,
-      monthlyRevenueRaw,
-      monthlyOrdersRaw,
+      monthlyRevenueRows,
+      monthlyOrderRows,
     ] = await Promise.all([
       prisma.restaurant.count(),
       prisma.restaurant.count({ where: { isActive: true } }),
@@ -298,18 +298,21 @@ export class RestaurantService {
           }
         },
       }),
-      // Monthly Revenue Trend (Last 6 Months)
-      prisma.payment.groupBy({
-        by: ['createdAt'],
-        where: { status: 'COMPLETED', createdAt: { gte: sixMonthsAgo } },
-        _sum: { totalAmount: true },
-      }),
-      // Monthly Orders Trend
-      prisma.order.groupBy({
-        by: ['createdAt'],
-        where: { createdAt: { gte: sixMonthsAgo } },
-        _count: { id: true },
-      }),
+      // Monthly revenue: aggregate by calendar month (not per-row createdAt)
+      prisma.$queryRaw<Array<{ month: Date; total: unknown }>>`
+        SELECT date_trunc('month', "createdAt") AS month, COALESCE(SUM("totalAmount"), 0)::float AS total
+        FROM "Payment"
+        WHERE status = 'COMPLETED' AND "createdAt" >= ${sixMonthsAgo}
+        GROUP BY date_trunc('month', "createdAt")
+        ORDER BY month ASC
+      `,
+      prisma.$queryRaw<Array<{ month: Date; cnt: unknown }>>`
+        SELECT date_trunc('month', "createdAt") AS month, COUNT(*)::int AS cnt
+        FROM "Order"
+        WHERE "createdAt" >= ${sixMonthsAgo}
+        GROUP BY date_trunc('month', "createdAt")
+        ORDER BY month ASC
+      `,
     ]);
 
     // Format top performing restaurants
@@ -320,40 +323,48 @@ export class RestaurantService {
       revenue: r.orders.reduce((sum, o) => sum + Number(o.totalAmount), 0),
     })).sort((a, b) => b.revenue - a.revenue);
 
-    // Grouping by month for charts (simple implementation for now)
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const getMonthName = (date: Date) => months[date.getMonth()];
-
-    const revenueTrend: Record<string, number> = {};
-    const ordersTrend: Record<string, number> = {};
-
-    // Initialize last 6 months
-    for (let i = 0; i < 6; i++) {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const monthKeysOrdered: string[] = [];
+    for (let i = 5; i >= 0; i--) {
       const d = new Date();
       d.setMonth(d.getMonth() - i);
-      const m = getMonthName(d);
-      revenueTrend[m] = 0;
-      ordersTrend[m] = 0;
+      d.setDate(1);
+      d.setHours(0, 0, 0, 0);
+      monthKeysOrdered.push(monthKey(d));
     }
 
-    monthlyRevenueRaw.forEach(item => {
-      const m = getMonthName(new Date(item.createdAt));
-      if (revenueTrend[m] !== undefined) {
-        revenueTrend[m] += Number(item._sum.totalAmount || 0);
+    const revenueByKey: Record<string, number> = {};
+    const ordersByKey: Record<string, number> = {};
+    monthKeysOrdered.forEach((k) => {
+      revenueByKey[k] = 0;
+      ordersByKey[k] = 0;
+    });
+
+    monthlyRevenueRows.forEach((row) => {
+      const d = new Date(row.month);
+      const k = monthKey(d);
+      if (revenueByKey[k] !== undefined) {
+        revenueByKey[k] = Number(row.total);
       }
     });
 
-    monthlyOrdersRaw.forEach(item => {
-      const m = getMonthName(new Date(item.createdAt));
-      if (ordersTrend[m] !== undefined) {
-        ordersTrend[m] += item._count.id;
+    monthlyOrderRows.forEach((row) => {
+      const d = new Date(row.month);
+      const k = monthKey(d);
+      if (ordersByKey[k] !== undefined) {
+        ordersByKey[k] = Number(row.cnt);
       }
     });
 
-    // Convert to sorted arrays for frontend
-    const sortedMonths = Object.keys(revenueTrend).reverse();
-    const formattedRevenueTrend = sortedMonths.map(m => ({ month: m, amount: revenueTrend[m] }));
-    const formattedOrdersTrend = sortedMonths.map(m => ({ month: m, count: ordersTrend[m] }));
+    const labelForKey = (key: string) => {
+      const [y, m] = key.split('-').map(Number);
+      const d = new Date(y, m - 1, 1);
+      return `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+    };
+
+    const formattedRevenueTrend = monthKeysOrdered.map((k) => ({ month: labelForKey(k), amount: revenueByKey[k] }));
+    const formattedOrdersTrend = monthKeysOrdered.map((k) => ({ month: labelForKey(k), count: ordersByKey[k] }));
 
     return {
       totalRestaurants,

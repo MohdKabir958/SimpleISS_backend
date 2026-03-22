@@ -57,26 +57,24 @@ export class ReportService {
   }
 
   async getPopularItems(restaurantId: string, limit = 10) {
-    // In Prisma SQLite, group by on joined fields is complex, so we do it memory-efficiently
-    const completedOrders = await prisma.order.findMany({
-      where: { restaurantId, status: OrderStatus.COMPLETED },
-      include: { items: true },
-    });
+    const rows = await prisma.$queryRaw<
+      Array<{ menuItemId: string; itemName: string; quantity: unknown; revenue: unknown }>
+    >`
+      SELECT oi."menuItemId", oi."itemName",
+             SUM(oi.quantity)::int AS quantity,
+             SUM(oi.quantity * oi."itemPrice")::float AS revenue
+      FROM "OrderItem" oi
+      INNER JOIN "Order" o ON oi."orderId" = o.id
+      WHERE o."restaurantId" = ${restaurantId} AND o.status = ${OrderStatus.COMPLETED}
+      GROUP BY oi."menuItemId", oi."itemName"
+      ORDER BY SUM(oi.quantity) DESC
+      LIMIT ${limit}
+    `;
 
-    const itemCounts: Record<string, { name: string, quantity: number, revenue: number }> = {};
-
-    completedOrders.forEach((order: any) => {
-      order.items.forEach((item: any) => {
-        if (!itemCounts[item.menuItemId]) {
-          itemCounts[item.menuItemId] = { name: item.itemName, quantity: 0, revenue: 0 };
-        }
-        itemCounts[item.menuItemId].quantity += item.quantity;
-        itemCounts[item.menuItemId].revenue += item.quantity * Number(item.itemPrice);
-      });
-    });
-
-    return Object.values(itemCounts)
-      .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, limit);
+    return rows.map((r) => ({
+      name: r.itemName,
+      quantity: Number(r.quantity),
+      revenue: Number(r.revenue),
+    }));
   }
 }

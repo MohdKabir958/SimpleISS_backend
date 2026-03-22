@@ -1,7 +1,8 @@
 import http from 'http';
 import app from './app';
 import { config } from './config/env';
-import { connectRedis } from './config/redis';
+import { connectRedis, disconnectRedis } from './config/redis';
+import { cleanupExpiredRefreshTokens } from './modules/auth/auth.service';
 import { logger } from './config/logger';
 import { initSocketServer } from './socket/socketServer';
 import { prisma } from './config/database';
@@ -24,6 +25,16 @@ async function bootstrap() {
     server.listen(config.port, () => {
       logger.info(`Server running in ${config.env} mode on port ${config.port}`);
     });
+
+    // Expired refresh tokens (daily)
+    setInterval(() => {
+      cleanupExpiredRefreshTokens()
+        .then((n) => {
+          if (n > 0) logger.info('Cleaned expired refresh tokens', { deleted: n });
+        })
+        .catch((err) => logger.warn('Refresh token cleanup failed', { err }));
+    }, 24 * 60 * 60 * 1000);
+    cleanupExpiredRefreshTokens().catch(() => undefined);
   } catch (error) {
     logger.error('Failed to start server', { error });
     process.exit(1);
@@ -39,6 +50,7 @@ const shutdown = async () => {
       logger.info('HTTP server closed');
       await prisma.$disconnect();
       logger.info('Database disconnected');
+      await disconnectRedis();
       process.exit(0);
     });
   } catch (err) {

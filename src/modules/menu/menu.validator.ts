@@ -12,6 +12,12 @@ export const reorderCategorySchema = z.object({
   sortOrder: z.number().int().min(0),
 });
 
+const boolFromMultipart = z.preprocess(
+  (v) => v === true || v === 'true' || v === '1' || v === 'on',
+  z.boolean(),
+);
+
+/** JSON / application/json bodies */
 export const createMenuItemSchema = z.object({
   name: z.string().min(2).max(100).trim(),
   price: z.number().positive().max(99999).multipleOf(0.01),
@@ -20,7 +26,18 @@ export const createMenuItemSchema = z.object({
   isVeg: z.boolean().default(false),
 });
 
+/** multipart/form-data: multer gives strings for price & booleans */
+export const createMenuItemMultipartSchema = z.object({
+  name: z.string().min(2).max(100).trim(),
+  price: z.coerce.number().positive().max(99999),
+  description: z.string().max(500).nullish(),
+  categoryId: z.string().uuid(),
+  isVeg: boolFromMultipart.default(false),
+});
+
 export const updateMenuItemSchema = createMenuItemSchema.partial();
+
+export const updateMenuItemMultipartSchema = createMenuItemMultipartSchema.partial();
 
 export const toggleAvailabilitySchema = z.object({
   isAvailable: z.boolean(),

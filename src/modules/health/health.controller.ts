@@ -43,6 +43,10 @@ export class HealthController {
   async ready(_req: Request, res: Response): Promise<void> {
     try {
       await prisma.$queryRaw`SELECT 1`;
+      const redis = getRedis();
+      if (redis) {
+        await redis.ping();
+      }
       sendSuccess(res, { status: 'ready' });
     } catch {
       res.status(503).json({

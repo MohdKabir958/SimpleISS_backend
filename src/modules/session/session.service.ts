@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { getRedis } from '../../config/redis';
 import { logger } from '../../config/logger';
@@ -44,16 +45,27 @@ export class SessionService {
       where: { tableId, status: SessionStatus.ACTIVE },
     });
 
-    // 4. Create new session if none exists
+    // 4. Create new session if none exists (unique partial index on ACTIVE per table may race — retry)
     if (!session) {
-      session = await prisma.tableSession.create({
-        data: {
-          restaurantId,
-          tableId,
-          status: SessionStatus.ACTIVE,
-        },
-      });
-      logger.info('New table session created', { sessionId: session.id, tableId });
+      try {
+        session = await prisma.tableSession.create({
+          data: {
+            restaurantId,
+            tableId,
+            status: SessionStatus.ACTIVE,
+          },
+        });
+        logger.info('New table session created', { sessionId: session.id, tableId });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+          session = await prisma.tableSession.findFirst({
+            where: { tableId, status: SessionStatus.ACTIVE },
+          });
+          if (!session) throw e;
+        } else {
+          throw e;
+        }
+      }
     }
 
     // 5. Update Redis cache

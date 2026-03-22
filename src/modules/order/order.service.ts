@@ -144,8 +144,11 @@ export class OrderService {
     };
 
     if (newStatus === OrderStatus.ACCEPTED) updateData.acceptedAt = new Date();
-    if (newStatus === OrderStatus.PREPARING) updateData.preparedAt = new Date();
-    if (newStatus === OrderStatus.READY) updateData.readyAt = new Date();
+    // preparedAt = kitchen finished prep (same moment order is ready for pickup); not when PREPARING starts
+    if (newStatus === OrderStatus.READY) {
+      updateData.readyAt = new Date();
+      updateData.preparedAt = new Date();
+    }
     if (newStatus === OrderStatus.SERVED) updateData.servedAt = new Date();
     if (newStatus === OrderStatus.COMPLETED) updateData.completedAt = new Date();
     if (newStatus === OrderStatus.REJECTED) updateData.rejectionReason = rejectionReason;
