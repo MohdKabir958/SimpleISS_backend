@@ -126,7 +126,7 @@ Loaded via `dotenv` from **`backend/.env`** (do **not** commit real secrets).
 | `REDIS_URL` | No** | Standard Redis URL (`redis://` or `rediss://`) when Upstash vars are not both set (default: `redis://localhost:6379`) |
 | `JWT_ACCESS_SECRET` | **Yes** | Min 32 characters |
 | `JWT_REFRESH_SECRET` | **Yes** | Min 32 characters |
-| `CORS_ORIGIN` | No | Allowed browser origin for CORS (default: `http://localhost:8080`) |
+| `CORS_ORIGIN` | No | Comma-separated **browser** origins (scheme + host + port). Flutter web’s port changes (e.g. `56611`) — list every one you use. Default: `http://localhost:8080` |
 | `STORAGE_TYPE` | No | `local` \| `s3` \| `cloudinary` (default: `local`) |
 | `QR_BASE_URL` | No | Base URL embedded in QR links (default: `http://localhost:8080`) |
 | `S3_*` / `CLOUDINARY_URL` | If used | See `.env.example` for optional object storage |
@@ -306,7 +306,7 @@ Ensure **`DATABASE_URL`**, **`REDIS_URL`**, and JWT secrets are injected at runt
 ## Production notes
 
 1. Set **`NODE_ENV=production`**, strong **JWT** secrets, and a **PostgreSQL** URL with TLS (`sslmode=require` on many hosts).
-2. Set **`CORS_ORIGIN`** to your real web/app origin(s).
+2. Set **`CORS_ORIGIN`** to your real web/app origin(s), comma-separated (e.g. `https://app.example.com,http://localhost:56611` for local Flutter web + production).
 3. Run **`npx prisma migrate deploy`** on deploy (not only `dev`).
 4. Run Redis reliably (managed Redis in production is recommended).
 5. Back up the database and `uploads/` (or use S3/Cloudinary for images).
@@ -321,7 +321,8 @@ Ensure **`DATABASE_URL`**, **`REDIS_URL`**, and JWT secrets are injected at runt
 | DB connection errors | URL, firewall, `sslmode=require` for cloud Postgres |
 | Redis connection errors | Redis running; or Upstash URL+token set; `rediss://` requires TLS (handled automatically) |
 | Prisma Studio shows 0 rows | `.env` `DATABASE_URL` points to intended DB; restart Studio |
-| CORS errors from browser | `CORS_ORIGIN` matches frontend origin (scheme + host + port) |
+| CORS errors from browser | `CORS_ORIGIN` includes the **exact** frontend origin (scheme + host + port) |
+| Dio `connection error` / `XMLHttpRequest onError` (Flutter **web**) | Usually **CORS**: backend must allow the page’s origin (e.g. `http://localhost:56611`). Also **Render cold start** can delay the first response — retry after ~30–60s or bump client timeouts. |
 
 ---
 

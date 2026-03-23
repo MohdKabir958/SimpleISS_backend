@@ -14,7 +14,12 @@ export class MenuService {
     return prisma.menuCategory.findMany({
       where: { restaurantId, isActive: true },
       orderBy: { sortOrder: 'asc' },
-      include: { _count: { select: { items: true } } },
+      include: {
+        items: {
+          where: { isActive: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
     });
   }
 
@@ -177,8 +182,15 @@ export class MenuService {
     
     // Check cache
     if (redis) {
-      const cached = await redis.get(`menu:${restaurant.id}`);
-      if (cached) menuData = JSON.parse(cached);
+      try {
+        const cached = await redis.get(`menu:${restaurant.id}`);
+        if (cached) menuData = JSON.parse(cached);
+      } catch (e) {
+        logger.warn('Menu cache read failed, falling back to DB', {
+          restaurantId: restaurant.id,
+          error: e instanceof Error ? e.message : 'Unknown error',
+        });
+      }
     }
 
     if (!menuData) {
@@ -202,7 +214,14 @@ export class MenuService {
 
       // Set cache
       if (redis) {
-        await redis.setex(`menu:${restaurant.id}`, MENU_CACHE_TTL, JSON.stringify(menuData));
+        try {
+          await redis.setex(`menu:${restaurant.id}`, MENU_CACHE_TTL, JSON.stringify(menuData));
+        } catch (e) {
+          logger.warn('Menu cache write failed', {
+            restaurantId: restaurant.id,
+            error: e instanceof Error ? e.message : 'Unknown error',
+          });
+        }
       }
     }
 
@@ -217,8 +236,15 @@ export class MenuService {
   private async invalidateMenuCache(restaurantId: string): Promise<void> {
     const redis = getRedis();
     if (redis) {
-      await redis.del(`menu:${restaurantId}`);
-      logger.debug('Menu cache invalidated', { restaurantId });
+      try {
+        await redis.del(`menu:${restaurantId}`);
+        logger.debug('Menu cache invalidated', { restaurantId });
+      } catch (e) {
+        logger.warn('Menu cache invalidation failed', {
+          restaurantId,
+          error: e instanceof Error ? e.message : 'Unknown error',
+        });
+      }
     }
   }
 }

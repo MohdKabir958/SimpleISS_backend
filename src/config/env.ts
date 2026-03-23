@@ -20,7 +20,16 @@ const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET must be at least 32 characters'),
   JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
 
-  CORS_ORIGIN: z.string().default('http://localhost:8080'),
+  /** Comma-separated browser origins allowed to call the API (Flutter web port varies, e.g. 56611). */
+  CORS_ORIGIN: z
+    .string()
+    .default('http://localhost:8080')
+    .transform((s) =>
+      s
+        .split(',')
+        .map((o) => o.trim())
+        .filter(Boolean),
+    ),
 
   STORAGE_TYPE: z.enum(['local', 's3', 'cloudinary']).default('local'),
 
@@ -72,7 +81,8 @@ export const config = {
   },
 
   cors: {
-    origin: parsed.data.CORS_ORIGIN,
+    /** Parsed from CORS_ORIGIN (comma-separated in .env). */
+    origins: parsed.data.CORS_ORIGIN,
   },
 
   storage: {

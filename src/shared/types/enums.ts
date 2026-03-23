@@ -36,8 +36,8 @@ export enum PaymentStatus {
 
 // Valid status transitions
 export const ORDER_STATUS_TRANSITIONS: Record<string, OrderStatus[]> = {
-  [OrderStatus.PLACED]: [OrderStatus.ACCEPTED, OrderStatus.REJECTED, OrderStatus.CANCELLED],
-  [OrderStatus.ACCEPTED]: [OrderStatus.PREPARING, OrderStatus.CANCELLED],
+  [OrderStatus.PLACED]: [OrderStatus.ACCEPTED, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.REJECTED, OrderStatus.CANCELLED],
+  [OrderStatus.ACCEPTED]: [OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.CANCELLED],
   [OrderStatus.PREPARING]: [OrderStatus.READY, OrderStatus.CANCELLED],
   [OrderStatus.READY]: [OrderStatus.SERVED, OrderStatus.CANCELLED],
   [OrderStatus.SERVED]: [OrderStatus.COMPLETED],

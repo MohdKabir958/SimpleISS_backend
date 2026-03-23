@@ -9,9 +9,66 @@ import { SessionStatus } from '../../shared/types/enums';
 const SESSION_TTL = 4 * 60 * 60; // 4 hours
 
 export class SessionService {
-  /**
-   * Called by customer scanning QR code. Creates a new session or returns existing active one.
-   */
+  async getActiveSessions(restaurantId: string) {
+    const sessions = await prisma.tableSession.findMany({
+      where: { restaurantId, status: SessionStatus.ACTIVE },
+      include: {
+        table: { select: { tableNumber: true } },
+        orders: { orderBy: { createdAt: 'desc' } },
+        payment: { select: { status: true, id: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return sessions.map((s: any) => {
+      const hasPendingPayment = Array.isArray(s.payment)
+        ? s.payment.some((p: any) => p.status === 'PENDING')
+        : s.payment?.status === 'PENDING';
+        
+      // Ensure 'orders' is mapped to prevent missing property errors in frontend
+      return {
+        ...s,
+        status: hasPendingPayment ? 'bill_requested' : s.status,
+      };
+    });
+  }
+
+  async completePaymentBySession(restaurantId: string, sessionId: string, method: string) {
+    const payment = await prisma.payment.findFirst({
+      where: { sessionId, restaurantId, status: 'PENDING' },
+    });
+
+    if (!payment) throw new NotFoundError('Pending Payment not found for this session');
+
+    return prisma.$transaction(async (tx: any) => {
+      const updatedPayment = await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'COMPLETED',
+          method: method as any,
+          paidAt: new Date(),
+        },
+      });
+
+      await tx.tableSession.update({
+        where: { id: sessionId },
+        data: {
+          status: SessionStatus.COMPLETED,
+          closedAt: new Date(),
+        },
+      });
+
+      const redis = getRedis();
+      if (redis) {
+        const session = await tx.tableSession.findUnique({ where: { id: sessionId } });
+        if (session) await redis.del(`session:table:${session.tableId}`);
+      }
+
+      logger.info('Payment completed via session ID', { sessionId });
+      return updatedPayment;
+    });
+  }
+
   async createOrResumeSession(restaurantSlug: string, tableId: string) {
     // 1. Validate restaurant & table
     const table = await prisma.table.findFirst({

@@ -22,6 +22,21 @@ export class SessionController {
   }
 
   // Admin
+  async getActiveSessions(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      sendSuccess(res, await service.getActiveSessions(req.restaurantId!));
+    } catch (e) { next(e); }
+  }
+
+  // Admin
+  async completePayment(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const payment = await service.completePaymentBySession(req.restaurantId!, req.params.sessionId as string, req.body.paymentMethod);
+      sendSuccess(res, payment, 'Payment completed via session');
+    } catch (e) { next(e); }
+  }
+
+  // Admin
   async closeSession(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const session = await service.closeSession(req.restaurantId!, req.params.sessionId as string, req.body.status);

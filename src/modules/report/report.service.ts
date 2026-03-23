@@ -6,23 +6,32 @@ export class ReportService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [totalOrdersToday, completedSessionsToday, revenueToday] = await Promise.all([
+    const [totalOrdersToday, activeSessions, revenueToday, pendingOrders, totalTables] = await Promise.all([
       prisma.order.count({
         where: { restaurantId, createdAt: { gte: today } },
       }),
       prisma.tableSession.count({
-        where: { restaurantId, status: 'COMPLETED', createdAt: { gte: today } },
+        where: { restaurantId, status: 'ACTIVE' },
       }),
       prisma.payment.aggregate({
         where: { restaurantId, status: 'COMPLETED', createdAt: { gte: today } },
         _sum: { totalAmount: true },
       }),
+      prisma.order.count({
+        where: { restaurantId, status: { in: ['PLACED', 'ACCEPTED', 'PREPARING'] } },
+      }),
+      prisma.table.count({
+        where: { restaurantId, isActive: true },
+      }),
     ]);
 
     return {
-      orders: totalOrdersToday,
-      sessions: completedSessionsToday,
-      revenue: Number(revenueToday._sum.totalAmount || 0),
+      todayOrders: totalOrdersToday,
+      activeSessions: activeSessions,
+      totalTables,
+      todayRevenue: Number(revenueToday._sum.totalAmount || 0),
+      totalRevenue: Number(revenueToday._sum.totalAmount || 0), // Alias for ReportsScreen
+      pendingOrders: pendingOrders,
     };
   }
 
@@ -53,7 +62,11 @@ export class ReportService {
       total += amount;
     });
 
-    return { dailyRevenue, total };
+    return { 
+      dailyRevenue, 
+      total,
+      totalRevenue: total // Alias for ReportsScreen
+    };
   }
 
   async getPopularItems(restaurantId: string, limit = 10) {
@@ -73,8 +86,11 @@ export class ReportService {
 
     return rows.map((r) => ({
       name: r.itemName,
+      itemName: r.itemName, // Alias
       quantity: Number(r.quantity),
+      totalQuantity: Number(r.quantity), // Alias
       revenue: Number(r.revenue),
+      totalRevenue: Number(r.revenue), // Alias
     }));
   }
 }

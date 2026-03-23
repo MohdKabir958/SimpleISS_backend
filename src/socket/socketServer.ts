@@ -22,7 +22,9 @@ export async function initSocketServer(httpServer: HttpServer): Promise<Server> 
     cors: {
       origin: config.isDev
         ? [/http:\/\/localhost:\d+/, /http:\/\/127\.0\.0\.1:\d+/]
-        : config.cors.origin,
+        : config.cors.origins.length <= 1
+          ? config.cors.origins[0] ?? false
+          : config.cors.origins,
       credentials: true,
     },
     pingTimeout: 60000,
