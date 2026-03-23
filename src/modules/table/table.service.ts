@@ -23,7 +23,27 @@ export class TableService {
     const existing = await prisma.table.findUnique({
       where: { restaurantId_tableNumber: { restaurantId, tableNumber: input.tableNumber } },
     });
-    if (existing) throw new ConflictError(`Table ${input.tableNumber} already exists`);
+
+    // Soft-delete aware behavior:
+    // If same table number exists but inactive, restore it instead of throwing 409.
+    if (existing) {
+      if (!existing.isActive) {
+        const restored = await prisma.table.update({
+          where: { id: existing.id },
+          data: {
+            isActive: true,
+            capacity: input.capacity,
+          },
+        });
+        logger.info('Table restored from soft-delete', {
+          tableId: restored.id,
+          restaurantId,
+          number: input.tableNumber,
+        });
+        return restored;
+      }
+      throw new ConflictError(`Table ${input.tableNumber} already exists`);
+    }
 
     const table = await prisma.table.create({
       data: { ...input, restaurantId },

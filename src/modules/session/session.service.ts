@@ -13,7 +13,16 @@ export class SessionService {
     const sessions = await prisma.tableSession.findMany({
       where: { restaurantId, status: SessionStatus.ACTIVE },
       include: {
-        table: { select: { tableNumber: true } },
+        table: {
+          select: {
+            id: true,
+            restaurantId: true,
+            tableNumber: true,
+            capacity: true,
+            qrCodeUrl: true,
+            isActive: true,
+          },
+        },
         orders: { orderBy: { createdAt: 'desc' } },
         payment: { select: { status: true, id: true } },
       },

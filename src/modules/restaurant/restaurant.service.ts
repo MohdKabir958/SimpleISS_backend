@@ -415,14 +415,16 @@ export class RestaurantService {
       LIMIT 6
     `;
 
-    const [kitchenLoginsCount, totalTables, totalCustomersVisited] = await Promise.all([
+    const [kitchenLoginsCount, totalTables, totalCustomersVisitedRows] = await Promise.all([
       prisma.user.count({ where: { restaurantId, role: 'KITCHEN_STAFF', isActive: true } }),
       prisma.table.count({ where: { restaurantId, isActive: true } }),
-      prisma.order.groupBy({
-        by: ['customerId'],
-        where: { restaurantId, customerId: { not: null } },
-      }).then((rows) => rows.length),
+      prisma.$queryRaw<Array<{ total: unknown }>>`
+        SELECT COUNT(DISTINCT COALESCE("customerId"::text, CONCAT('guest_', "sessionId"::text)))::int AS total
+        FROM "Order"
+        WHERE "restaurantId" = ${restaurantId}
+      `,
     ]);
+    const totalCustomersVisited = Number(totalCustomersVisitedRows[0]?.total ?? 0);
 
     const tables = await prisma.table.findMany({
       where: { restaurantId, isActive: true },
@@ -432,23 +434,23 @@ export class RestaurantService {
 
     const tableDetails = await Promise.all(
       tables.map(async (table) => {
-        const [distinctCustomers, weeklyRows] = await Promise.all([
-          prisma.order.groupBy({
-            by: ['customerId'],
-            where: { tableId: table.id, customerId: { not: null } },
-          }),
+        const [tableCustomerRows, weeklyRows] = await Promise.all([
+          prisma.$queryRaw<Array<{ total: unknown }>>`
+            SELECT COUNT(DISTINCT COALESCE("customerId"::text, CONCAT('guest_', "sessionId"::text)))::int AS total
+            FROM "Order"
+            WHERE "tableId" = ${table.id}
+          `,
           prisma.$queryRaw<Array<{ week_start: Date; customer_id: string; customer_name: string; customer_email: string; orders_count: number }>>`
             SELECT
               date_trunc('week', o."createdAt") AS week_start,
-              o."customerId"::text AS customer_id,
-              u."name"::text AS customer_name,
-              u."email"::text AS customer_email,
+              COALESCE(o."customerId"::text, CONCAT('guest_', o."sessionId"::text)) AS customer_id,
+              COALESCE(u."name"::text, 'Guest Customer') AS customer_name,
+              COALESCE(u."email"::text, 'guest@session.local') AS customer_email,
               COUNT(o.id)::int AS orders_count
             FROM "Order" o
-            JOIN "User" u ON u.id = o."customerId"
+            LEFT JOIN "User" u ON u.id = o."customerId"
             WHERE o."tableId" = ${table.id}
-              AND o."customerId" IS NOT NULL
-            GROUP BY week_start, o."customerId", u."name", u."email"
+            GROUP BY week_start, COALESCE(o."customerId"::text, CONCAT('guest_', o."sessionId"::text)), COALESCE(u."name"::text, 'Guest Customer'), COALESCE(u."email"::text, 'guest@session.local')
             ORDER BY week_start DESC, orders_count DESC
           `,
         ]);
@@ -469,7 +471,7 @@ export class RestaurantService {
           'id': table.id,
           'tableNumber': table.tableNumber,
           'capacity': table.capacity,
-          'customersVisited': distinctCustomers.length,
+          'customersVisited': Number(tableCustomerRows[0]?.total ?? 0),
           'weeklyCustomers': Object.entries(weeklyMap).map(([weekStart, customers]) => ({
             weekStart,
             customers,
@@ -498,6 +500,38 @@ export class RestaurantService {
     customerId: string,
     tableId?: string,
   ) {
+    if (customerId.startsWith('guest_')) {
+      const guestSessionId = customerId.replace('guest_', '');
+      const guestOrders = await prisma.order.findMany({
+        where: {
+          restaurantId,
+          sessionId: guestSessionId,
+          ...(tableId ? { tableId } : {}),
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          items: true,
+          table: { select: { id: true, tableNumber: true } },
+        },
+      });
+
+      const totalSpent = guestOrders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
+      return {
+        customer: {
+          id: customerId,
+          name: 'Guest Customer',
+          email: 'guest@session.local',
+          role: 'GUEST',
+          createdAt: guestOrders[0]?.createdAt ?? new Date(),
+        },
+        summary: {
+          totalOrders: guestOrders.length,
+          totalSpent,
+        },
+        orders: guestOrders,
+      };
+    }
+
     const customer = await prisma.user.findUnique({
       where: { id: customerId },
       select: { id: true, name: true, email: true, role: true, createdAt: true },
