@@ -11,7 +11,13 @@ const router = Router();
 const c = new PaymentController();
 
 // Public
-router.post('/public/session/:sessionId/bill', validate({ body: requestBillSchema }), c.requestBill.bind(c));
+router.post(
+  '/public/session/:sessionId/bill',
+  authenticate,
+  allowRoles(Role.CUSTOMER),
+  validate({ body: requestBillSchema }),
+  c.requestBill.bind(c)
+);
 
 // Admin
 const admin = [authenticate, allowRoles(Role.RESTAURANT_ADMIN), restaurantIsolation];

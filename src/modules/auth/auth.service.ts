@@ -8,9 +8,70 @@ import { JwtPayload } from '../../shared/types/interfaces';
 import { Role } from '../../shared/types/enums';
 import { AuthenticationError } from '../../shared/errors/AuthenticationError';
 import { NotFoundError } from '../../shared/errors/NotFoundError';
-import { LoginInput } from './auth.validator';
+import { ConflictError } from '../../shared/errors/ConflictError';
+import { CustomerSignupInput, LoginInput } from './auth.validator';
 
 export class AuthService {
+  async signupCustomer(input: CustomerSignupInput): Promise<{ accessToken: string; refreshToken: string; user: object }> {
+    const existing = await prisma.user.findUnique({ where: { email: input.email } });
+    if (existing) {
+      throw new ConflictError('An account with this email already exists');
+    }
+
+    const hashedPassword = await bcrypt.hash(input.password, 12);
+    const user = await prisma.user.create({
+      data: {
+        email: input.email,
+        password: hashedPassword,
+        name: input.name,
+        role: Role.CUSTOMER,
+        isActive: true,
+      },
+      include: { restaurant: true },
+    });
+
+    const payload: JwtPayload = {
+      userId: user.id,
+      email: user.email,
+      role: user.role as Role,
+      restaurantId: user.restaurantId,
+    };
+
+    const accessToken = this.generateAccessToken(payload);
+    const refreshToken = this.generateRefreshToken(payload);
+    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+
+    await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        restaurantId: null,
+        restaurant: null,
+      },
+    };
+  }
+
+  async loginCustomer(input: LoginInput): Promise<{ accessToken: string; refreshToken: string; user: object }> {
+    const result = await this.login(input);
+    const role = (result.user as any).role;
+    if (role !== Role.CUSTOMER) {
+      throw new AuthenticationError('Use customer account to login here', 'AUTH_INVALID_CREDENTIALS');
+    }
+    return result;
+  }
+
   async login(input: LoginInput): Promise<{ accessToken: string; refreshToken: string; user: object }> {
     const user = await prisma.user.findUnique({
       where: { email: input.email },

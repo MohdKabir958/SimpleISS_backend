@@ -17,7 +17,7 @@ export class PaymentService {
     
     // Check if any orders are uncompleted
     const incompleteOrders = session.orders.filter(
-      (o: any) => !['COMPLETED', 'REJECTED', 'CANCELLED'].includes(o.status)
+      (o: any) => !['SERVED', 'COMPLETED', 'REJECTED', 'CANCELLED'].includes(o.status)
     );
 
     if (incompleteOrders.length > 0) {

@@ -9,7 +9,7 @@ import { OrderStatus, SessionStatus, ORDER_STATUS_TRANSITIONS } from '../../shar
 import { PlaceOrderInput } from './order.validator';
 
 export class OrderService {
-  async placeOrder(sessionId: string, input: PlaceOrderInput, idempotencyKey: string) {
+  async placeOrder(sessionId: string, input: PlaceOrderInput, idempotencyKey: string, customerId?: string) {
     // 1. Idempotency Check
     const existingOrder = await prisma.order.findUnique({
       where: { idempotencyKey },
@@ -65,6 +65,7 @@ export class OrderService {
           sessionId,
           restaurantId: session.restaurantId,
           tableId: session.tableId,
+          customerId,
           status: OrderStatus.PLACED,
           totalAmount,
           notes: input.notes,
@@ -93,6 +94,18 @@ export class OrderService {
       where: { sessionId },
       orderBy: { createdAt: 'desc' },
       include: { items: true },
+    });
+  }
+
+  async getCustomerOrderHistory(customerId: string) {
+    return prisma.order.findMany({
+      where: { customerId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: true,
+        restaurant: { select: { id: true, name: true, slug: true } },
+        table: { select: { id: true, tableNumber: true } },
+      },
     });
   }
 

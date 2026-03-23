@@ -32,6 +32,9 @@ router.post('/admin/users', authenticate, allowRoles(Role.SUPER_ADMIN), validate
 
 // ========== SUPER ADMIN - Platform Stats ==========
 router.get('/admin/stats', authenticate, allowRoles(Role.SUPER_ADMIN), controller.getPlatformStats.bind(controller));
+router.get('/admin/behavior/restaurants', authenticate, allowRoles(Role.SUPER_ADMIN), controller.listBehaviorRestaurants.bind(controller));
+router.get('/admin/behavior/restaurants/:id', authenticate, allowRoles(Role.SUPER_ADMIN), controller.getRestaurantBehavior.bind(controller));
+router.get('/admin/behavior/restaurants/:id/customers/:customerId/orders', authenticate, allowRoles(Role.SUPER_ADMIN), controller.getCustomerOrderDetails.bind(controller));
 
 // ========== RESTAURANT ADMIN - Profile ==========
 router.get('/restaurant/profile', authenticate, allowRoles(Role.RESTAURANT_ADMIN), restaurantIsolation, controller.getProfile.bind(controller));

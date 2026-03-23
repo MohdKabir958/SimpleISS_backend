@@ -16,7 +16,7 @@ export class OrderController {
       const idempotencyKey =
         (req.headers['idempotency-key'] as string | undefined) || bodyKey || uuidv4();
       const sessionId = req.params.sessionId as string;
-      const order = await service.placeOrder(sessionId, req.body, idempotencyKey);
+      const order = await service.placeOrder(sessionId, req.body, idempotencyKey, req.user?.userId);
       
       // Emit socket event to kitchen
       const io = getSocketServer();
@@ -32,6 +32,13 @@ export class OrderController {
   async getSessionOrders(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       sendSuccess(res, await service.getSessionOrders(req.params.sessionId as string));
+    } catch (e) { next(e); }
+  }
+
+  // Customer Endpoint
+  async getCustomerHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      sendSuccess(res, await service.getCustomerOrderHistory(req.user!.userId));
     } catch (e) { next(e); }
   }
 

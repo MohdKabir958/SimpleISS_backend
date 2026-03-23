@@ -5,6 +5,38 @@ import { sendSuccess } from '../../shared/utils/response';
 const authService = new AuthService();
 
 export class AuthController {
+  async signupCustomer(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { accessToken, refreshToken, user } = await authService.signupCustomer(req.body);
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: '/',
+      });
+      sendSuccess(res, { accessToken, refreshToken, user }, 'Customer signup successful', 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async loginCustomer(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { accessToken, refreshToken, user } = await authService.loginCustomer(req.body);
+      res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: '/',
+      });
+      sendSuccess(res, { accessToken, refreshToken, user }, 'Customer login successful');
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async login(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { accessToken, refreshToken, user } = await authService.login(req.body);

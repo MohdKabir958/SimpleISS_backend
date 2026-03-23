@@ -379,4 +379,153 @@ export class RestaurantService {
       ordersTrend: formattedOrdersTrend,
     };
   }
+
+  async listBehaviorRestaurants() {
+    const restaurants = await prisma.restaurant.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, slug: true },
+      orderBy: { name: 'asc' },
+    });
+    return restaurants;
+  }
+
+  async getRestaurantBehavior(restaurantId: string) {
+    const restaurant = await prisma.restaurant.findUnique({
+      where: { id: restaurantId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        address: true,
+        phone: true,
+        email: true,
+        openingTime: true,
+        closingTime: true,
+        isActive: true,
+      },
+    });
+    if (!restaurant) throw new NotFoundError('Restaurant');
+
+    const monthlyRevenue = await prisma.$queryRaw<Array<{ month: Date; total: unknown }>>`
+      SELECT date_trunc('month', "createdAt") AS month, COALESCE(SUM("totalAmount"), 0)::float AS total
+      FROM "Payment"
+      WHERE "restaurantId" = ${restaurantId} AND status = 'COMPLETED'
+      GROUP BY date_trunc('month', "createdAt")
+      ORDER BY month DESC
+      LIMIT 6
+    `;
+
+    const [kitchenLoginsCount, totalTables, totalCustomersVisited] = await Promise.all([
+      prisma.user.count({ where: { restaurantId, role: 'KITCHEN_STAFF', isActive: true } }),
+      prisma.table.count({ where: { restaurantId, isActive: true } }),
+      prisma.order.groupBy({
+        by: ['customerId'],
+        where: { restaurantId, customerId: { not: null } },
+      }).then((rows) => rows.length),
+    ]);
+
+    const tables = await prisma.table.findMany({
+      where: { restaurantId, isActive: true },
+      orderBy: { tableNumber: 'asc' },
+      select: { id: true, tableNumber: true, capacity: true },
+    });
+
+    const tableDetails = await Promise.all(
+      tables.map(async (table) => {
+        const [distinctCustomers, weeklyRows] = await Promise.all([
+          prisma.order.groupBy({
+            by: ['customerId'],
+            where: { tableId: table.id, customerId: { not: null } },
+          }),
+          prisma.$queryRaw<Array<{ week_start: Date; customer_id: string; customer_name: string; customer_email: string; orders_count: number }>>`
+            SELECT
+              date_trunc('week', o."createdAt") AS week_start,
+              o."customerId"::text AS customer_id,
+              u."name"::text AS customer_name,
+              u."email"::text AS customer_email,
+              COUNT(o.id)::int AS orders_count
+            FROM "Order" o
+            JOIN "User" u ON u.id = o."customerId"
+            WHERE o."tableId" = ${table.id}
+              AND o."customerId" IS NOT NULL
+            GROUP BY week_start, o."customerId", u."name", u."email"
+            ORDER BY week_start DESC, orders_count DESC
+          `,
+        ]);
+
+        const weeklyMap: Record<string, Array<{ customerId: string; name: string; email: string; ordersCount: number }>> = {};
+        for (const row of weeklyRows) {
+          const weekKey = row.week_start.toISOString();
+          if (!weeklyMap[weekKey]) weeklyMap[weekKey] = [];
+          weeklyMap[weekKey].push({
+            'customerId': row.customer_id,
+            'name': row.customer_name,
+            'email': row.customer_email,
+            'ordersCount': row.orders_count,
+          });
+        }
+
+        return {
+          'id': table.id,
+          'tableNumber': table.tableNumber,
+          'capacity': table.capacity,
+          'customersVisited': distinctCustomers.length,
+          'weeklyCustomers': Object.entries(weeklyMap).map(([weekStart, customers]) => ({
+            weekStart,
+            customers,
+          })),
+        };
+      }),
+    );
+
+    return {
+      'restaurant': restaurant,
+      'summary': {
+        'kitchenLogins': kitchenLoginsCount,
+        'totalTables': totalTables,
+        'totalCustomersVisited': totalCustomersVisited,
+        'monthlyRevenue': monthlyRevenue.map((row) => ({
+          month: row.month.toISOString(),
+          amount: Number(row.total),
+        })),
+      },
+      'tables': tableDetails,
+    };
+  }
+
+  async getCustomerOrderDetails(
+    restaurantId: string,
+    customerId: string,
+    tableId?: string,
+  ) {
+    const customer = await prisma.user.findUnique({
+      where: { id: customerId },
+      select: { id: true, name: true, email: true, role: true, createdAt: true },
+    });
+    if (!customer) throw new NotFoundError('Customer');
+
+    const orders = await prisma.order.findMany({
+      where: {
+        restaurantId,
+        customerId,
+        ...(tableId ? { tableId } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: true,
+        table: { select: { id: true, tableNumber: true } },
+      },
+    });
+
+    const totalSpent = orders.reduce((sum, o) => sum + Number(o.totalAmount), 0);
+
+    return {
+      customer,
+      summary: {
+        totalOrders: orders.length,
+        totalSpent,
+      },
+      orders,
+    };
+  }
 }

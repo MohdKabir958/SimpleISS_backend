@@ -19,6 +19,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   restaurant Restaurant? @relation(fields: [restaurantId], references: [id])
+  customerOrders Order[] @relation("CustomerOrders")
 
   @@index([email])
   @@index([restaurantId])
@@ -133,6 +134,7 @@ model Order {
   sessionId       String
   restaurantId    String
   tableId         String
+  customerId      String?
   status          String    @default("PLACED") // PLACED, ACCEPTED, PREPARING, READY, SERVED, COMPLETED, REJECTED, CANCELLED
   totalAmount     Float
   notes           String?
@@ -151,12 +153,14 @@ model Order {
   session    TableSession @relation(fields: [sessionId], references: [id])
   restaurant Restaurant   @relation(fields: [restaurantId], references: [id])
   table      Table        @relation(fields: [tableId], references: [id])
+  customer   User?        @relation("CustomerOrders", fields: [customerId], references: [id])
   items      OrderItem[]
 
   @@index([restaurantId, status])
   @@index([sessionId])
   @@index([placedAt])
   @@index([idempotencyKey])
+  @@index([customerId])
 }
 
 model OrderItem {

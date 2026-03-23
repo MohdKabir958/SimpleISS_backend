@@ -14,13 +14,16 @@ const c = new OrderController();
 // Public Order Placement
 router.post(
   '/public/session/:sessionId/order',
+  authenticate,
+  allowRoles(Role.CUSTOMER),
   orderLimiter,
   validate({ body: placeOrderSchema }),
   c.placeOrder.bind(c)
 );
 
 // Public View Orders
-router.get('/public/session/:sessionId/orders', c.getSessionOrders.bind(c));
+router.get('/public/session/:sessionId/orders', authenticate, allowRoles(Role.CUSTOMER), c.getSessionOrders.bind(c));
+router.get('/public/customer/orders', authenticate, allowRoles(Role.CUSTOMER), c.getCustomerHistory.bind(c));
 
 // Admin & Kitchen Routes
 const staff = [authenticate, allowRoles(Role.RESTAURANT_ADMIN, Role.KITCHEN_STAFF), restaurantIsolation];

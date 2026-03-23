@@ -118,4 +118,25 @@ export class RestaurantController {
       sendSuccess(res, stats);
     } catch (error) { next(error); }
   }
+
+  async listBehaviorRestaurants(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      sendSuccess(res, await service.listBehaviorRestaurants());
+    } catch (error) { next(error); }
+  }
+
+  async getRestaurantBehavior(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      sendSuccess(res, await service.getRestaurantBehavior(req.params.id as string));
+    } catch (error) { next(error); }
+  }
+
+  async getCustomerOrderDetails(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const restaurantId = req.params.id as string;
+      const customerId = req.params.customerId as string;
+      const tableId = (req.query.tableId as string | undefined) || undefined;
+      sendSuccess(res, await service.getCustomerOrderDetails(restaurantId, customerId, tableId));
+    } catch (error) { next(error); }
+  }
 }

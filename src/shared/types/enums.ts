@@ -2,6 +2,7 @@ export enum Role {
   SUPER_ADMIN = 'SUPER_ADMIN',
   RESTAURANT_ADMIN = 'RESTAURANT_ADMIN',
   KITCHEN_STAFF = 'KITCHEN_STAFF',
+  CUSTOMER = 'CUSTOMER',
 }
 
 export enum SessionStatus {
